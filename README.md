@@ -21,38 +21,29 @@ A bilingual interactive terminal tool that discovers nearby IPv4 TLS endpoints, 
 
 ## 快速使用 / Quick start
 
-### Linux x86-64（amd64）
+需要 Go `1.26` 或以上版本。以下指令適用於 Linux、macOS 與 Windows；會下載並直接執行目前公開 `main` 分支的程式碼。
 
-自動下載最新執行檔至 `/tmp`、加入執行權限並啟動：
-
-Automatically download the latest binary to `/tmp`, make it executable, and run it:
+Requires Go `1.26` or later. The following command works on Linux, macOS, and Windows; it downloads and runs the current public `main` branch:
 
 ```sh
-release_download_url="$(
-  curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
-    grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_amd64' |
-    head -n 1
-)"
-curl -fL "$release_download_url" -o /tmp/reality-scanner-checker
-chmod +x /tmp/reality-scanner-checker
-/tmp/reality-scanner-checker
+go run github.com/aaacyrus/Reality-ScannerNChecker@latest
 ```
 
-其他 Linux、macOS 及 Windows 架構請前往 [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases) 下載對應版本。Linux 及 macOS 執行檔下載後需先執行 `chmod +x <檔名>`。
+### 本機開發 / Local development
 
-For other Linux, macOS, and Windows architectures, download the matching binary from [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases). Linux and macOS binaries require `chmod +x <filename>` before use.
+如要查看或修改原始碼：
 
-### 從原始碼執行 / Run from source
-
-需要 Go `1.26` 或以上版本：
-
-Requires Go `1.26` or later:
+To inspect or modify the source code:
 
 ```sh
 git clone https://github.com/aaacyrus/Reality-ScannerNChecker.git
 cd Reality-ScannerNChecker
 go run .
 ```
+
+預編譯執行檔會在發布後提供於 [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases)。
+
+Prebuilt executables will be available from [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases) after a version is published.
 
 ## 使用方法 / Usage
 
