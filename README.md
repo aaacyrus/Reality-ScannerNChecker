@@ -85,6 +85,12 @@ Follow the on-screen prompts after launch:
 - 掃描與檢測邏輯為本專案自行實作；國別判斷可選用外部 GeoIP 資料庫。
 - Scanning and validation logic is implemented in this project; country lookup optionally uses an external GeoIP database.
 
+## 授權 / License
+
+本專案採用 [Mozilla Public License 2.0](LICENSE)（`MPL-2.0`）。
+
+This project is licensed under the [Mozilla Public License 2.0](LICENSE) (`MPL-2.0`).
+
 ## Disclaimer
 
 本工具僅供合法的技術研究、網絡管理及已獲授權的測試用途。
