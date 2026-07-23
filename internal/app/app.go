@@ -161,28 +161,26 @@ func (a *App) detectPublicIP(ctx context.Context) (netip.Addr, error) {
 	stopSpinner()
 	if err == nil && result.Detected.IsValid() {
 		a.console.TStatus(ui.ToneSuccess, "ip_detected", result.Detected, result.Source)
-		return result.Detected, nil
+		return a.readPublicIPv4(ctx, result.Detected)
 	}
 	a.console.TStatus(ui.ToneWarning, "ip_ambiguous")
 	for index, candidate := range result.Candidates {
 		a.console.Tln("ip_candidate", index+1, candidate)
 	}
-	manual := len(result.Candidates) + 1
-	a.console.Tln("ip_manual_option", manual)
-	allowed := make([]int, 0, manual+1)
-	allowed = append(allowed, 0)
-	for value := 1; value <= manual; value++ {
-		allowed = append(allowed, value)
+	defaultIP := netip.Addr{}
+	if len(result.Candidates) > 0 {
+		defaultIP = result.Candidates[0]
 	}
-	choice, ok := a.console.Choice(ctx, a.console.Translator().T("ip_choice_prompt", manual), manual, allowed...)
-	if !ok || choice == 0 {
-		return netip.Addr{}, errUserExit
-	}
-	if choice <= len(result.Candidates) {
-		return result.Candidates[choice-1], nil
+	return a.readPublicIPv4(ctx, defaultIP)
+}
+
+func (a *App) readPublicIPv4(ctx context.Context, defaultIP netip.Addr) (netip.Addr, error) {
+	defaultValue := ""
+	if defaultIP.IsValid() {
+		defaultValue = defaultIP.String()
 	}
 	for {
-		raw, ok := a.console.Read(ctx, a.console.Translator().T("ip_manual_prompt"), "")
+		raw, ok := a.console.Read(ctx, a.console.Translator().T("ip_input_prompt", defaultValue), defaultValue)
 		if !ok {
 			return netip.Addr{}, errUserExit
 		}

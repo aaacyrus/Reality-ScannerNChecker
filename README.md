@@ -28,7 +28,7 @@ This command finds the Linux amd64 asset from the latest GitHub Release, downloa
 ```sh
 curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
   grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_amd64' | head -n 1 |
-  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker'
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
 ```
 
 For other Linux, macOS, and Windows architectures, download the matching asset from [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases). On Linux/macOS, run `chmod +x <filename>` after downloading.
@@ -104,7 +104,7 @@ This tool is intended only for lawful technical research, network administration
 ```sh
 curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
   grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_amd64' | head -n 1 |
-  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker'
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
 ```
 
 其他 Linux、macOS 及 Windows 架構請前往 [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases) 下載相符檔案。Linux／macOS 下載後請執行 `chmod +x <檔名>`。

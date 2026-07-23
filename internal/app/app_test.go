@@ -1,9 +1,15 @@
 package app
 
 import (
+	"context"
+	"net"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/aaacyrus/Reality-ScannerNChecker/internal/publicip"
+	"github.com/aaacyrus/Reality-ScannerNChecker/internal/ui"
 )
 
 func TestPrefixDetails(t *testing.T) {
@@ -42,5 +48,51 @@ func TestFormattingHelpers(t *testing.T) {
 	}
 	if got := compactDuration(65 * time.Second); got != "1m05s" {
 		t.Fatalf("compactDuration = %s", got)
+	}
+}
+
+func TestDetectPublicIPUsesDetectedAddressAsInputDefault(t *testing.T) {
+	t.Parallel()
+	var output strings.Builder
+	app := &App{
+		console: ui.NewConsole(strings.NewReader("\n"), &output, false),
+		ip: &publicip.Detector{
+			Interfaces: func() ([]net.Addr, error) {
+				return []net.Addr{&net.IPNet{IP: net.ParseIP("1.1.1.1"), Mask: net.CIDRMask(24, 32)}}, nil
+			},
+		},
+	}
+	app.console.SetLanguage("en")
+
+	ip, err := app.detectPublicIP(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ip.String(); got != "1.1.1.1" {
+		t.Fatalf("detected IP = %s, want 1.1.1.1", got)
+	}
+	if got := output.String(); !strings.Contains(got, "Enter scan seed IPv4 [default 1.1.1.1]:") {
+		t.Fatalf("input prompt did not show detected IPv4 as default:\n%s", got)
+	}
+}
+
+func TestDetectPublicIPAcceptsManualAddress(t *testing.T) {
+	t.Parallel()
+	app := &App{
+		console: ui.NewConsole(strings.NewReader("8.8.8.8\n"), &strings.Builder{}, false),
+		ip: &publicip.Detector{
+			Interfaces: func() ([]net.Addr, error) {
+				return []net.Addr{&net.IPNet{IP: net.ParseIP("1.1.1.1"), Mask: net.CIDRMask(24, 32)}}, nil
+			},
+		},
+	}
+	app.console.SetLanguage("en")
+
+	ip, err := app.detectPublicIP(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ip.String(); got != "8.8.8.8" {
+		t.Fatalf("manual IP = %s, want 8.8.8.8", got)
 	}
 }
