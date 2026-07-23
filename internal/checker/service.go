@@ -433,14 +433,14 @@ func (s *Service) validateExact(ctx context.Context, candidate domain.Candidate)
 	}
 	var headerEvidence []cdnEvidence
 	metrics.HTTP, metrics.HTTPStatus, headerEvidence, err = requestExact(ctx, candidate, tlsConfig)
+	evidence := append(cdnFromIP(candidate.IP), headerEvidence...)
 	if err != nil {
-		return validation{metrics: metrics}, &validationError{reason: "network", err: err}
+		return validation{metrics: metrics, cdn: evidence}, &validationError{reason: "network", err: err}
 	}
 	if !safeStatus(metrics.HTTPStatus) {
-		return validation{metrics: metrics}, &validationError{reason: "http_status", err: fmt.Errorf("unsafe HTTP status %d", metrics.HTTPStatus)}
+		return validation{metrics: metrics, cdn: evidence}, &validationError{reason: "http_status", err: fmt.Errorf("unsafe HTTP status %d", metrics.HTTPStatus)}
 	}
 	metrics.Success = true
-	evidence := append(cdnFromIP(candidate.IP), headerEvidence...)
 	return validation{metrics: metrics, cdn: evidence}, nil
 }
 
@@ -566,19 +566,25 @@ func successfulRoundCount(rounds []domain.DirectMetrics) int {
 
 func mergeCDNFinding(analysis *domain.SiteAnalysis, finding cdnFinding) {
 	if !finding.known {
+		if !analysis.CDNKnown && finding.evidence != "" {
+			analysis.CDNEvidence = finding.evidence
+		}
 		return
 	}
 	if analysis.CDNKnown && analysis.CDN {
 		if !finding.detected {
 			return
 		}
-		if analysis.CDNProvider != "" && finding.provider != "" && analysis.CDNProvider != finding.provider {
+		if analysis.CDNProvider == "" {
+			analysis.CDNProvider = finding.provider
+		} else if finding.provider != "" && analysis.CDNProvider != finding.provider {
 			analysis.CDNProvider = "Multiple"
 			analysis.CDNConfidence = "high"
 		}
-		if analysis.CDNEvidence != finding.evidence && finding.evidence != "" {
-			analysis.CDNEvidence = strings.Trim(analysis.CDNEvidence+"；"+finding.evidence, "；")
+		if finding.confidence == "high" {
+			analysis.CDNConfidence = "high"
 		}
+		analysis.CDNEvidence = mergeEvidence(analysis.CDNEvidence, finding.evidence)
 		return
 	}
 	analysis.CDNKnown = true
@@ -586,6 +592,25 @@ func mergeCDNFinding(analysis *domain.SiteAnalysis, finding cdnFinding) {
 	analysis.CDNProvider = finding.provider
 	analysis.CDNConfidence = finding.confidence
 	analysis.CDNEvidence = finding.evidence
+}
+
+func mergeEvidence(values ...string) string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, part := range strings.Split(value, "；") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			if _, exists := seen[part]; exists {
+				continue
+			}
+			seen[part] = struct{}{}
+			result = append(result, part)
+		}
+	}
+	return strings.Join(result, "；")
 }
 func classifyValidationFailure(err error) (string, string) {
 	var target *validationError

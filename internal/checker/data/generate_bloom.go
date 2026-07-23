@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -52,16 +51,7 @@ func main() {
 		panic(fmt.Sprintf("hostname count %d, want %d", len(seen), wantHostCount))
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(bits)
-	output := bufio.NewWriter(os.Stdout)
-	for len(encoded) > 76 {
-		fmt.Fprintln(output, encoded[:76])
-		encoded = encoded[76:]
-	}
-	if encoded != "" {
-		fmt.Fprintln(output, encoded)
-	}
-	if err := output.Flush(); err != nil {
+	if _, err := os.Stdout.Write(bits); err != nil {
 		panic(err)
 	}
 }

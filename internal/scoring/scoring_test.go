@@ -134,3 +134,33 @@ func TestCertificatePoints(t *testing.T) {
 		}
 	}
 }
+
+func TestUnknownOfflineSignalsNeverReceiveNegativeEvidencePoints(t *testing.T) {
+	t.Parallel()
+	metrics := domain.DirectMetrics{TLS: time.Millisecond, HTTP: time.Millisecond, CertificateDays: 90, Success: true}
+	results := []domain.Result{
+		{Candidate: domain.Candidate{SNI: "example.com"}, Analysis: domain.SiteAnalysis{}, Initial: metrics, Rounds: []domain.DirectMetrics{metrics, metrics, metrics}},
+		{Candidate: domain.Candidate{SNI: "example.com"}, Analysis: domain.SiteAnalysis{CDNKnown: true, HotKnown: true}, Initial: metrics, Rounds: []domain.DirectMetrics{metrics, metrics, metrics}},
+		{Candidate: domain.Candidate{SNI: "example.com"}, Analysis: domain.SiteAnalysis{CDNKnown: true, CDN: true, HotKnown: true, HotWebsite: true}, Initial: metrics, Rounds: []domain.DirectMetrics{metrics, metrics, metrics}},
+	}
+	ApplyPreliminary(results)
+	if results[0].Score.NoCDN != 0 || results[0].Score.NotHot != 0 {
+		t.Fatalf("preliminary unknown score=%+v", results[0].Score)
+	}
+	if results[1].Score.NoCDN != 15 || results[1].Score.NotHot != 10 {
+		t.Fatalf("preliminary known-negative score=%+v", results[1].Score)
+	}
+	if results[2].Score.NoCDN != 0 || results[2].Score.NotHot != 0 {
+		t.Fatalf("preliminary positive score=%+v", results[2].Score)
+	}
+	CalculateQualified(results)
+	if results[0].Score.NoCDN != 0 || results[0].Score.NotHot != 0 {
+		t.Fatalf("final unknown score=%+v", results[0].Score)
+	}
+	if results[1].Score.NoCDN != 15 || results[1].Score.NotHot != 10 {
+		t.Fatalf("final known-negative score=%+v", results[1].Score)
+	}
+	if results[2].Score.NoCDN != 0 || results[2].Score.NotHot != 0 {
+		t.Fatalf("final positive score=%+v", results[2].Score)
+	}
+}

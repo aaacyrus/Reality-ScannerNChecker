@@ -99,6 +99,7 @@ assets=(
   "$build_dir/${project_name}_${version_number}_windows_arm64.exe"
   "$build_dir/BUILD_INFO.txt"
   "$build_dir/LICENSE"
+  "$build_dir/THIRD_PARTY_NOTICES.md"
   "$build_dir/SHA256SUMS"
 )
 

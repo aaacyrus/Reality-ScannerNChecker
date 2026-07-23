@@ -2,8 +2,10 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,18 +77,25 @@ func TestCDNEvidenceMatrix(t *testing.T) {
 	if ignored := cdnFromHeaders(http.Header{"Server": {"cloudflare"}}); len(ignored) != 0 {
 		t.Fatalf("weak Server header was treated as proof: %+v", ignored)
 	}
+	staleIP := classifyCDN(cdnFromIP(netip.MustParseAddr("173.245.48.1")), 3, true, stale)
+	if !staleIP.known || !staleIP.detected || staleIP.confidence != "low" || !strings.Contains(staleIP.evidence, cdnSnapshot) {
+		t.Fatalf("stale IP-only signal: %+v", staleIP)
+	}
 	direct := classifyCDN(nil, 2, true, fresh)
 	if !direct.known || direct.detected {
 		t.Fatalf("fresh direct finding: %+v", direct)
 	}
 	for name, finding := range map[string]cdnFinding{
-		"stale":          classifyCDN(nil, 3, true, stale),
-		"one round":      classifyCDN(nil, 1, true, fresh),
+		"stale":           classifyCDN(nil, 3, true, stale),
+		"one round":       classifyCDN(nil, 1, true, fresh),
 		"cname unchecked": classifyCDN(nil, 3, false, fresh),
 	} {
 		if finding.known {
 			t.Errorf("%s no-signal result should be unknown: %+v", name, finding)
 		}
+	}
+	if finding := classifyCDN(nil, 3, true, stale); !strings.Contains(finding.evidence, "快照已過期") {
+		t.Fatalf("stale unknown reason=%+v", finding)
 	}
 }
 
@@ -113,6 +122,25 @@ func TestCDNRulesMatchOnlyExactBoundaries(t *testing.T) {
 	}
 }
 
+func TestMergeCDNFindingPromotesAndDeduplicatesEvidence(t *testing.T) {
+	t.Parallel()
+	analysis := domain.SiteAnalysis{
+		CDNKnown: true, CDN: true, CDNProvider: "Cloudflare", CDNConfidence: "medium",
+		CDNEvidence: "IP網段快照(20260723): Cloudflare",
+	}
+	mergeCDNFinding(&analysis, cdnFinding{
+		known: true, detected: true, provider: "Cloudflare", confidence: "high",
+		evidence: "IP網段快照(20260723): Cloudflare；HTTP強訊號:Cf-Ray",
+	})
+	if analysis.CDNConfidence != "high" || analysis.CDNEvidence != "IP網段快照(20260723): Cloudflare；HTTP強訊號:Cf-Ray" {
+		t.Fatalf("same-provider merge=%+v", analysis)
+	}
+	mergeCDNFinding(&analysis, cdnFinding{known: true, detected: true, provider: "Fastly", confidence: "medium", evidence: "HTTP強訊號:X-Served-By"})
+	if analysis.CDNProvider != "Multiple" || analysis.CDNConfidence != "high" {
+		t.Fatalf("conflicting-provider merge=%+v", analysis)
+	}
+}
+
 func TestVerifyQualifiedKeepsCDNDecisionPerCandidateIP(t *testing.T) {
 	t.Parallel()
 	metrics := domain.DirectMetrics{
@@ -122,7 +150,7 @@ func TestVerifyQualifiedKeepsCDNDecisionPerCandidateIP(t *testing.T) {
 	cdnIP := netip.MustParseAddr("1.1.1.1")
 	directIP := netip.MustParseAddr("1.1.1.2")
 	service := &Service{
-		now: func() time.Time { return time.Date(2026, time.July, 23, 0, 0, 0, 0, time.UTC) },
+		now:         func() time.Time { return time.Date(2026, time.July, 23, 0, 0, 0, 0, time.UTC) },
 		lookupCNAME: func(_ context.Context, host string) (string, error) { return host, nil },
 		validate: func(_ context.Context, candidate domain.Candidate) (validation, error) {
 			checked := validation{metrics: metrics}
@@ -153,5 +181,44 @@ func TestVerifyQualifiedKeepsCDNDecisionPerCandidateIP(t *testing.T) {
 				t.Fatalf("direct candidate=%+v", result)
 			}
 		}
+	}
+}
+
+func TestVerifyQualifiedKeepsCDNEvidenceFromFailedRound(t *testing.T) {
+	t.Parallel()
+	metrics := domain.DirectMetrics{
+		TLS: 20 * time.Millisecond, HTTP: 30 * time.Millisecond,
+		CertificateDays: 90, Success: true,
+	}
+	calls := 0
+	service := &Service{
+		now:         func() time.Time { return time.Date(2026, time.July, 23, 0, 0, 0, 0, time.UTC) },
+		lookupCNAME: func(_ context.Context, host string) (string, error) { return host, nil },
+		validate: func(_ context.Context, _ domain.Candidate) (validation, error) {
+			calls++
+			if calls == 1 {
+				failed := metrics
+				failed.Success = false
+				return validation{
+					metrics: failed,
+					cdn:     []cdnEvidence{{layer: cdnLayerHTTP, provider: "Cloudflare", detail: "HTTP強訊號:Cf-Ray"}},
+				}, &validationError{reason: "http_status", err: errors.New("unsafe HTTP status 503")}
+			}
+			return validation{metrics: metrics}, nil
+		},
+	}
+	run := domain.RunResult{Qualified: []domain.Result{{
+		Candidate: domain.Candidate{IP: netip.MustParseAddr("1.1.1.1"), SNI: "example.com"},
+		Analysis:  domain.SiteAnalysis{HotKnown: true}, Initial: metrics,
+	}}}
+
+	service.VerifyQualified(context.Background(), &run, nil)
+
+	if len(run.Ranked) != 1 {
+		t.Fatalf("ranked=%d rejected=%d", len(run.Ranked), len(run.Rejected))
+	}
+	result := run.Ranked[0]
+	if !result.Analysis.CDNKnown || !result.Analysis.CDN || result.Analysis.CDNProvider != "Cloudflare" || result.Score.NoCDN != 0 {
+		t.Fatalf("failed-round CDN evidence was lost: analysis=%+v score=%+v", result.Analysis, result.Score)
 	}
 }

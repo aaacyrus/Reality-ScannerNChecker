@@ -93,7 +93,7 @@ func DetailStyled(result domain.Result, translator i18n.Translator, colors bool)
 	if len(result.Candidate.RedirectChain) > 0 {
 		chain = strings.Join(result.Candidate.RedirectChain, " → ")
 	}
-	provider := valueOr(result.Analysis.CDNProvider, translator.T("unknown"))
+	provider := localizeProvider(valueOr(result.Analysis.CDNProvider, translator.T("unknown")), translator)
 	confidence := valueOr(result.Analysis.CDNConfidence, translator.T("unknown"))
 	evidence := valueOr(result.Analysis.CDNEvidence, translator.T("none"))
 	issuer := valueOr(metrics.CertificateIssuer, translator.T("unknown"))
@@ -106,7 +106,8 @@ func DetailStyled(result domain.Result, translator i18n.Translator, colors bool)
 		translator.T("detail.metrics", formatDuration(metrics.TCP), formatDuration(metrics.TLS), formatDuration(metrics.HTTP), successCount(result.Rounds)),
 		paint(colors, translator.T("detail.protocol", boolText(metrics.TLS13, translator), boolText(metrics.X25519, translator), boolText(metrics.HTTP2, translator), boolText(metrics.SNIValid, translator)), ansiCyan),
 		translator.T("detail.certificate", metrics.CertificateDays, issuer),
-		translator.T("detail.cdn", yesNo(result.Analysis.CDNKnown, result.Analysis.CDN, translator), provider, localizeConfidence(confidence, translator), localizeEvidence(evidence, translator)),
+		translator.T("detail.cdn", cdnStatus(result.Analysis, translator), provider, localizeConfidence(confidence, translator), localizeEvidence(evidence, translator)),
+		translator.T("detail.hot", yesNo(result.Analysis.HotKnown, result.Analysis.HotWebsite, translator), hotEvidence(result.Analysis, translator)),
 		translator.T("detail.location", countryName(result, translator), valueOr(result.Analysis.CountryCode, translator.T("unknown"))),
 	}, "\n")
 }
@@ -187,14 +188,18 @@ func yesNo(known, value bool, translator i18n.Translator) string {
 }
 
 func cdnLabel(result domain.Result, translator i18n.Translator) string {
-	if !result.Analysis.CDNKnown {
+	if result.Analysis.CDNKnown && result.Analysis.CDN && result.Analysis.CDNProvider != "" {
+		return localizeProvider(result.Analysis.CDNProvider, translator)
+	}
+	return cdnStatus(result.Analysis, translator)
+}
+
+func cdnStatus(analysis domain.SiteAnalysis, translator i18n.Translator) string {
+	if !analysis.CDNKnown {
 		return translator.T("unknown")
 	}
-	if !result.Analysis.CDN {
-		return translator.T("no")
-	}
-	if result.Analysis.CDNProvider != "" {
-		return result.Analysis.CDNProvider
+	if !analysis.CDN {
+		return translator.T("cdn.not_detected")
 	}
 	return translator.T("yes")
 }
@@ -220,6 +225,14 @@ func countryName(result domain.Result, translator i18n.Translator) string {
 
 func localizeConfidence(value string, translator i18n.Translator) string {
 	if translator.Language == domain.LanguageTraditionalChinese {
+		switch value {
+		case "high":
+			return "高"
+		case "medium":
+			return "中"
+		case "low":
+			return "低"
+		}
 		return value
 	}
 	switch value {
@@ -234,21 +247,49 @@ func localizeConfidence(value string, translator i18n.Translator) string {
 	}
 }
 
+func localizeProvider(value string, translator i18n.Translator) string {
+	if value == "Multiple" {
+		return translator.T("multiple")
+	}
+	return value
+}
+
+func hotEvidence(analysis domain.SiteAnalysis, translator i18n.Translator) string {
+	if analysis.HotSnapshot == "" {
+		return translator.T("none")
+	}
+	if analysis.HotKnown && analysis.HotWebsite {
+		return translator.T("evidence.hot_hit", analysis.HotSnapshot, valueOr(analysis.HotMatch, translator.T("unknown")))
+	}
+	if analysis.HotKnown {
+		return translator.T("evidence.hot_miss", analysis.HotSnapshot)
+	}
+	return translator.T("evidence.hot_stale", analysis.HotSnapshot)
+}
+
 func localizeEvidence(value string, translator i18n.Translator) string {
 	if translator.Language == domain.LanguageTraditionalChinese {
 		return value
 	}
 	replacements := map[string]string{
-		"HTTP强响应头特征:":    "Strong HTTP header signal:",
-		"HTTP头值CDN域名特征:": "CDN domain signal in HTTP header:",
-		"HTTP中等响应头特征:":   "Medium HTTP header signal:",
-		"证书签发者提示:":       "Certificate issuer signal:",
-		"CNAME记录特征:":     "CNAME signal:",
-		"NS记录:":          "NS record:",
+		"HTTP強訊號:": "Strong HTTP signal: ",
+		"CNAME特徵:": "CNAME signal: ",
+		"IP網段快照(":  "IP range snapshot (",
+		"至少兩輪成功重測未發現已知CDN訊號（快照": "No known CDN signal in at least two successful verification rounds (snapshot ",
+		"內建CDN快照已過期（快照":         "Embedded CDN snapshot is stale (snapshot ",
+		"CNAME查詢未完成，無法排除CDN":    "CNAME lookup was incomplete; CDN cannot be ruled out",
+		"HTTP强响应头特征:":           "Strong HTTP header signal:",
+		"HTTP头值CDN域名特征:":        "CDN domain signal in HTTP header:",
+		"HTTP中等响应头特征:":          "Medium HTTP header signal:",
+		"证书签发者提示:":              "Certificate issuer signal:",
+		"CNAME记录特征:":            "CNAME signal:",
+		"NS记录:":                 "NS record:",
 	}
 	for source, target := range replacements {
 		value = strings.ReplaceAll(value, source, target)
 	}
+	value = strings.ReplaceAll(value, "）", ")")
+	value = strings.ReplaceAll(value, "；", "; ")
 	return value
 }
 

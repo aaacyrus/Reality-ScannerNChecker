@@ -55,6 +55,7 @@ mkdir -p "$output_dir"
 build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 go_version="$(go version)"
 cp LICENSE "$output_dir/LICENSE"
+cp THIRD_PARTY_NOTICES.md "$output_dir/THIRD_PARTY_NOTICES.md"
 cat > "$output_dir/BUILD_INFO.txt" <<EOF
 Project: Reality Scanner & Checker
 Version: $version
@@ -97,9 +98,9 @@ done
 (
   cd "$output_dir"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${build_files[@]}" BUILD_INFO.txt LICENSE > SHA256SUMS
+    sha256sum "${build_files[@]}" BUILD_INFO.txt LICENSE THIRD_PARTY_NOTICES.md > SHA256SUMS
   else
-    shasum -a 256 "${build_files[@]}" BUILD_INFO.txt LICENSE > SHA256SUMS
+    shasum -a 256 "${build_files[@]}" BUILD_INFO.txt LICENSE THIRD_PARTY_NOTICES.md > SHA256SUMS
   fi
 )
 

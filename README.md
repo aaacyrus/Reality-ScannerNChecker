@@ -65,11 +65,14 @@ After launching, follow the on-screen prompts:
 
 - Scanning, public-IP detection, and candidate validation use direct connections and ignore proxy environment variables.
 - Country-data updates may use the system HTTP proxy; without the database, candidates are rejected as location unknown.
+- CDN and popularity classification is offline: it uses only target DNS, exact candidate-IP responses, and the minimal snapshots embedded in the executable. No third-party detection or ranking API is queried during a scan.
+- "Popular" means an exact hostname is probably present in the embedded CrUX global Top 100k snapshot. Snapshot misses become unknown after expiry, so stale data cannot grant no-CDN or not-popular points.
 - Scanning is fixed to TCP `443`.
 
 ### Dependencies
 
 - Scanning and validation logic is implemented in this project; country lookup optionally uses an external GeoIP database.
+- Embedded CrUX and CDN data provenance, versions, and transformations, together with the CrUX data license, are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### License
 
@@ -144,11 +147,14 @@ go run .
 
 - 掃描、公網 IP 偵測及候選驗證均使用直連並忽略代理環境變數。
 - 國別資料更新可使用系統 HTTP 代理；未取得資料時，工具會以「無法判斷地區」淘汰候選。
+- CDN 與熱門度採離線判定：只使用目標 DNS、精確候選 IP 回應，以及執行檔內建的最小快照；掃描期間不查詢任何第三方檢測或排名 API。
+- 「熱門」代表精確 hostname 很可能存在於內建 CrUX 全球 Top 100k 快照。快照過期後，未命中會退回「未知」，不會以過期資料取得無 CDN 或非熱門分數。
 - 掃描固定使用 TCP `443`。
 
 ### 依賴
 
 - 掃描與檢測邏輯為本專案自行實作；國別判斷可選用外部 GeoIP 資料庫。
+- 內建 CrUX 與 CDN 資料的來源、版本及轉換，以及 CrUX 資料授權，列於 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ### 授權
 

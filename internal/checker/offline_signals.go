@@ -3,7 +3,6 @@ package checker
 import (
 	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
 	"encoding/binary"
 	"net/http"
 	"net/netip"
@@ -27,10 +26,8 @@ var (
 // Derived from the Chrome UX Report global Top 100k for 202606 (CC BY 4.0).
 // See THIRD_PARTY_NOTICES.md for source, transformation, and checksum details.
 //
-//go:embed data/crux_top_100k_202606.b64
-var cruxBloomBase64 string
-
-var cruxBloom = mustDecodeBloom(cruxBloomBase64)
+//go:embed data/crux_top_100k_202606.bin
+var cruxBloom []byte
 
 type cdnEvidence struct {
 	layer    uint8
@@ -74,7 +71,11 @@ func classifyPopularity(hosts []string, now time.Time) (known, hot bool, match s
 }
 
 func cruxBloomContains(host string) bool {
-	digest := sha256.Sum256([]byte(normalizeDomain(host)))
+	host = normalizeDomain(host)
+	if host == "" {
+		return false
+	}
+	digest := sha256.Sum256([]byte(host))
 	first := binary.LittleEndian.Uint64(digest[:8]) % cruxBloomBits
 	step := binary.LittleEndian.Uint64(digest[8:16]) % cruxBloomBits
 	if step == 0 {
@@ -87,18 +88,6 @@ func cruxBloomContains(host string) bool {
 		}
 	}
 	return true
-}
-
-func mustDecodeBloom(encoded string) []byte {
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
-	if err != nil {
-		panic(err)
-	}
-	want := int((cruxBloomBits + 7) / 8)
-	if len(decoded) != want {
-		panic("invalid embedded CrUX bloom filter size")
-	}
-	return decoded
 }
 
 func classifyCDN(observations []cdnEvidence, successfulRounds int, cnameChecked bool, now time.Time) cdnFinding {
@@ -125,9 +114,13 @@ func classifyCDN(observations []cdnEvidence, successfulRounds int, cnameChecked 
 	}
 	if len(providers) > 0 {
 		provider := providers[0]
-		confidence := "medium"
 		if len(providers) > 1 {
 			provider = "Multiple"
+		}
+		confidence := "medium"
+		if now.After(cdnNegativeFreshUntil) && layers == cdnLayerIP {
+			confidence = "low"
+		} else if len(providers) > 1 {
 			confidence = "high"
 		} else if layers&(layers-1) != 0 {
 			confidence = "high"
@@ -135,7 +128,13 @@ func classifyCDN(observations []cdnEvidence, successfulRounds int, cnameChecked 
 		return cdnFinding{known: true, detected: true, provider: provider, confidence: confidence, evidence: strings.Join(details, "；")}
 	}
 	if successfulRounds >= 2 && cnameChecked && !now.After(cdnNegativeFreshUntil) {
-		return cdnFinding{known: true, confidence: "medium", evidence: "三輪未發現已知CDN訊號（快照" + cdnSnapshot + "）"}
+		return cdnFinding{known: true, confidence: "medium", evidence: "至少兩輪成功重測未發現已知CDN訊號（快照" + cdnSnapshot + "）"}
+	}
+	if successfulRounds >= 2 && now.After(cdnNegativeFreshUntil) {
+		return cdnFinding{evidence: "內建CDN快照已過期（快照" + cdnSnapshot + "）"}
+	}
+	if successfulRounds >= 2 && !cnameChecked {
+		return cdnFinding{evidence: "CNAME查詢未完成，無法排除CDN"}
 	}
 	return cdnFinding{}
 }
@@ -158,9 +157,6 @@ func cdnFromHeaders(headers http.Header) []cdnEvidence {
 		if headers.Get(rule.header) != "" {
 			result = append(result, cdnEvidence{layer: cdnLayerHTTP, provider: rule.provider, detail: "HTTP強訊號:" + rule.header})
 		}
-	}
-	if value := strings.ToLower(headers.Get("X-Served-By")); strings.Contains(value, "cache-") {
-		result = append(result, cdnEvidence{layer: cdnLayerHTTP, provider: "Fastly", detail: "HTTP強訊號:X-Served-By"})
 	}
 	return result
 }
@@ -192,12 +188,13 @@ func cdnFromCNAME(cname string) []cdnEvidence {
 }
 
 func cdnFromIP(ip netip.Addr) []cdnEvidence {
+	result := make([]cdnEvidence, 0, 1)
 	for _, rule := range cdnPrefixRules {
 		if rule.prefix.Contains(ip) {
-			return []cdnEvidence{{layer: cdnLayerIP, provider: rule.provider, detail: "IP網段快照:" + rule.provider}}
+			result = append(result, cdnEvidence{layer: cdnLayerIP, provider: rule.provider, detail: "IP網段快照(" + cdnSnapshot + "): " + rule.provider})
 		}
 	}
-	return nil
+	return result
 }
 
 type cdnPrefixRule struct {

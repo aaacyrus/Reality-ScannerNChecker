@@ -13,11 +13,12 @@
 | Windows | x86-64 | `windows/amd64` | `.exe` |
 | Windows | ARM64 | `windows/arm64` | `.exe` |
 
-所有執行檔均直接輸出，不經 ZIP、tar 或其他壓縮。每次建置亦會產生
-`BUILD_INFO.txt` 及 `SHA256SUMS`。
+所有執行檔均直接輸出，不經 ZIP、tar 或其他壓縮。每次建置亦會附上
+`BUILD_INFO.txt`、`LICENSE`、`THIRD_PARTY_NOTICES.md` 及 `SHA256SUMS`。
 
 All executables are emitted directly without ZIP, tar, or other compression.
-Every build also produces `BUILD_INFO.txt` and `SHA256SUMS`.
+Every build also includes `BUILD_INFO.txt`, `LICENSE`,
+`THIRD_PARTY_NOTICES.md`, and `SHA256SUMS`.
 
 ## 標準流程 / Standard workflow
 
@@ -73,13 +74,13 @@ and it does not push or upload files.
 ```
 
 發佈前必須人工輸入完整版本號確認。腳本只會上傳明確列出的八個未壓縮
-執行檔、`BUILD_INFO.txt` 及 `SHA256SUMS`，
+執行檔、`BUILD_INFO.txt`、`LICENSE`、`THIRD_PARTY_NOTICES.md` 及 `SHA256SUMS`，
 不會上傳 `dist/builds/` 目錄、專案目錄或其他檔案。新 Release 會綁定已
 push 的目前 commit；更新既有 Release 時，tag 亦必須指向同一個 commit。
 
 Publishing requires typing the full version as confirmation. The script uploads
 only the eight explicitly listed uncompressed executables, `BUILD_INFO.txt`,
-and `SHA256SUMS`. It never uploads the
+`LICENSE`, `THIRD_PARTY_NOTICES.md`, and `SHA256SUMS`. It never uploads the
 `dist/builds/` directory, project directory, or any other file. A new release
 targets the current pushed commit; an existing release tag must point to that
 same commit.
