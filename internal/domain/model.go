@@ -70,6 +70,8 @@ type SiteAnalysis struct {
 	CDNEvidence   string
 	HotKnown      bool
 	HotWebsite    bool
+	HotSnapshot   string
+	HotMatch      string
 	FinalDomain   string
 	RedirectChain []string
 	HTTPStatus    int

@@ -7,6 +7,9 @@ An interactive terminal tool that discovers nearby IPv4 TLS endpoints, validates
 > [!CAUTION]
 > Only scan networks you own or are explicitly authorized to test.
 
+> [!TIP]
+> Run this tool on the server where you plan to deploy Reality. Scan and validation results depend on the server's public egress IP, routing, and network conditions, so running it on the deployment server produces the most representative results.
+
 ### Highlights
 
 - Bilingual interactive UI: Traditional Chinese and English numeric menus, with Enter accepting defaults
@@ -82,6 +85,9 @@ This tool is intended only for lawful technical research, network administration
 
 > [!CAUTION]
 > 只可掃描你擁有或已獲明確授權測試的網絡。
+
+> [!TIP]
+> 建議在需要部署 Reality 的伺服器上執行本工具。掃描與檢測結果會受伺服器的公網出口 IP、路由及網絡環境影響，因此在實際部署機上執行最能反映真實效果。
 
 ### 功能特色
 

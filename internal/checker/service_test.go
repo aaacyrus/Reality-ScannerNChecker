@@ -56,17 +56,17 @@ func TestInitialValidationRetriesOneTransientFailure(t *testing.T) {
 	attempts := 0
 	service := &Service{
 		retryDelay: func() time.Duration { return 0 },
-		validate: func(context.Context, domain.Candidate) (domain.DirectMetrics, error) {
+		validate: func(context.Context, domain.Candidate) (validation, error) {
 			attempts++
 			if attempts == 1 {
-				return domain.DirectMetrics{}, errors.New("connection reset by peer")
+				return validation{}, errors.New("connection reset by peer")
 			}
-			return domain.DirectMetrics{Success: true}, nil
+			return validation{metrics: domain.DirectMetrics{Success: true}}, nil
 		},
 	}
-	metrics, err := service.validateInitialWithRetry(context.Background(), domain.Candidate{})
-	if err != nil || !metrics.Success || attempts != 2 {
-		t.Fatalf("metrics=%+v err=%v attempts=%d", metrics, err, attempts)
+	checked, err := service.validateInitialWithRetry(context.Background(), domain.Candidate{})
+	if err != nil || !checked.metrics.Success || attempts != 2 {
+		t.Fatalf("validation=%+v err=%v attempts=%d", checked, err, attempts)
 	}
 }
 
@@ -75,9 +75,9 @@ func TestInitialValidationDoesNotRetryDeterministicFailure(t *testing.T) {
 	attempts := 0
 	service := &Service{
 		retryDelay: func() time.Duration { return 0 },
-		validate: func(context.Context, domain.Candidate) (domain.DirectMetrics, error) {
+		validate: func(context.Context, domain.Candidate) (validation, error) {
 			attempts++
-			return domain.DirectMetrics{}, &validationError{reason: "certificate", err: errors.New("certificate is invalid")}
+			return validation{}, &validationError{reason: "certificate", err: errors.New("certificate is invalid")}
 		},
 	}
 	_, err := service.validateInitialWithRetry(context.Background(), domain.Candidate{})
@@ -102,9 +102,9 @@ func TestVerifyQualifiedScoresEveryCandidate(t *testing.T) {
 	}
 	var calls atomic.Int64
 	service := &Service{
-		validate: func(context.Context, domain.Candidate) (domain.DirectMetrics, error) {
+		validate: func(context.Context, domain.Candidate) (validation, error) {
 			calls.Add(1)
-			return metrics, nil
+			return validation{metrics: metrics}, nil
 		},
 	}
 	run := domain.RunResult{}
@@ -137,9 +137,9 @@ func TestVerifyQualifiedScoresEveryCandidate(t *testing.T) {
 func TestVerifyQualifiedScoresLatencyProportionally(t *testing.T) {
 	t.Parallel()
 	service := &Service{
-		validate: func(_ context.Context, candidate domain.Candidate) (domain.DirectMetrics, error) {
+		validate: func(_ context.Context, candidate domain.Candidate) (validation, error) {
 			multiplier := time.Duration(candidate.IP.As4()[3])
-			return domain.DirectMetrics{
+			return validation{metrics: domain.DirectMetrics{
 				TCP:              10 * time.Millisecond * multiplier,
 				TLS:              40 * time.Millisecond * multiplier,
 				HTTP:             80 * time.Millisecond * multiplier,
@@ -150,7 +150,7 @@ func TestVerifyQualifiedScoresLatencyProportionally(t *testing.T) {
 				CertificateValid: true,
 				CertificateDays:  90,
 				Success:          true,
-			}, nil
+			}}, nil
 		},
 	}
 	run := domain.RunResult{}

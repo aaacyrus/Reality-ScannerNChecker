@@ -122,6 +122,7 @@ func (a *App) selectLanguage(ctx context.Context) error {
 	} else {
 		a.console.SetLanguage(domain.LanguageEnglish)
 	}
+	a.console.TStatus(ui.ToneInfo, "deployment_recommendation")
 	return nil
 }
 

@@ -44,27 +44,30 @@ type inspection struct {
 	finalDomain   string
 	redirectChain []string
 	status        int
-	cdnKnown      bool
-	cdn           bool
-	cdnProvider   string
-	cdnConfidence string
-	cdnEvidence   string
+}
+
+type validation struct {
+	metrics domain.DirectMetrics
+	cdn     []cdnEvidence
 }
 
 type Service struct {
-	geo        *geoip2.Reader
-	prefix     netip.Prefix
-	infinite   bool
-	resolver   *net.Resolver
-	inspect    func(context.Context, string) (inspection, error)
-	validate   func(context.Context, domain.Candidate) (domain.DirectMetrics, error)
-	retryDelay func() time.Duration
+	geo         *geoip2.Reader
+	prefix      netip.Prefix
+	infinite    bool
+	resolver    *net.Resolver
+	inspect     func(context.Context, string) (inspection, error)
+	validate    func(context.Context, domain.Candidate) (validation, error)
+	lookupCNAME func(context.Context, string) (string, error)
+	retryDelay  func() time.Duration
+	now         func() time.Time
 }
 
 func New(dataDir string, prefix netip.Prefix, infinite bool) (*Service, error) {
 	service := &Service{
 		prefix: prefix.Masked(), infinite: infinite, resolver: net.DefaultResolver,
-		inspect: inspectWebsite, retryDelay: jitterDelay,
+		inspect: inspectWebsite, lookupCNAME: net.DefaultResolver.LookupCNAME,
+		retryDelay: jitterDelay, now: time.Now,
 	}
 	service.validate = service.validateExact
 	if dataDir == "" {
@@ -175,7 +178,12 @@ func (s *Service) analyzeSource(ctx context.Context, source domain.Source) ([]do
 		reason, detail := classifyValidationFailure(err)
 		return nil, []domain.Result{rejectionForSource(source, reason, detail)}
 	}
-	analysis := domain.SiteAnalysis{CDNKnown: check.cdnKnown, CDN: check.cdn, CDNProvider: check.cdnProvider, CDNConfidence: check.cdnConfidence, CDNEvidence: check.cdnEvidence, FinalDomain: check.finalDomain, RedirectChain: check.redirectChain, HTTPStatus: check.status}
+	hosts := append(append([]string(nil), check.redirectChain...), check.finalDomain)
+	hotKnown, hot, hotMatch := classifyPopularity(hosts, s.currentTime())
+	analysis := domain.SiteAnalysis{
+		HotKnown: hotKnown, HotWebsite: hot, HotSnapshot: cruxSnapshot, HotMatch: hotMatch,
+		FinalDomain: check.finalDomain, RedirectChain: check.redirectChain, HTTPStatus: check.status,
+	}
 	if !validDomain(check.finalDomain) {
 		return nil, []domain.Result{rejectionForSourceWithAnalysis(source, analysis, "invalid_domain", check.finalDomain)}
 	}
@@ -201,12 +209,14 @@ func (s *Service) analyzeSource(ctx context.Context, source domain.Source) ([]do
 			rejected = append(rejected, domain.Result{Candidate: candidate, Analysis: candidateAnalysis, Reason: "china", Detail: code})
 			continue
 		}
-		metrics, err := s.validateInitialWithRetry(candidateCtx, candidate)
+		checked, err := s.validateInitialWithRetry(candidateCtx, candidate)
+		metrics := checked.metrics
 		if err != nil {
 			reason, detail := classifyValidationFailure(err)
 			rejected = append(rejected, domain.Result{Candidate: candidate, Analysis: candidateAnalysis, Initial: metrics, Reason: reason, Detail: detail})
 			continue
 		}
+		mergeCDNFinding(&candidateAnalysis, classifyCDN(checked.cdn, 0, false, s.currentTime()))
 		qualified = append(qualified, domain.Result{Candidate: candidate, Analysis: candidateAnalysis, Initial: metrics, Suitable: true})
 	}
 	return qualified, rejected
@@ -262,8 +272,7 @@ func inspectWebsite(ctx context.Context, name string) (inspection, error) {
 		if !safeStatus(response.StatusCode) {
 			return inspection{}, &validationError{reason: "http_status", err: fmt.Errorf("unsafe HTTP status %d", response.StatusCode)}
 		}
-		cdn, provider, evidence := cdnSignal(response.Header)
-		return inspection{finalDomain: normalizeDomain(current.Hostname()), redirectChain: chain, status: response.StatusCode, cdnKnown: cdn, cdn: cdn, cdnProvider: provider, cdnConfidence: map[bool]string{true: "header"}[cdn], cdnEvidence: evidence}, nil
+		return inspection{finalDomain: normalizeDomain(current.Hostname()), redirectChain: chain, status: response.StatusCode}, nil
 	}
 	return inspection{}, &validationError{reason: "http_status", err: errors.New("too many redirects")}
 }
@@ -305,22 +314,7 @@ func validateTLSState(state *tls.ConnectionState, host string) error {
 	return nil
 }
 
-func cdnSignal(headers http.Header) (bool, string, string) {
-	for header, provider := range map[string]string{"Cf-Ray": "Cloudflare", "X-Amz-Cf-Id": "CloudFront", "X-Fastly-Request-Id": "Fastly", "X-Akamai-Transformed": "Akamai"} {
-		if headers.Get(header) != "" {
-			return true, provider, "HTTP header: " + header
-		}
-	}
-	server := strings.ToLower(headers.Get("Server"))
-	for _, provider := range []string{"cloudflare", "cloudfront", "fastly", "akamai"} {
-		if strings.Contains(server, provider) {
-			return true, strings.Title(provider), "Server header"
-		}
-	}
-	return false, "", ""
-}
-
-func (s *Service) validateInitialWithRetry(ctx context.Context, candidate domain.Candidate) (domain.DirectMetrics, error) {
+func (s *Service) validateInitialWithRetry(ctx context.Context, candidate domain.Candidate) (validation, error) {
 	metrics, err := s.validate(ctx, candidate)
 	if err == nil || !isTransient(err) {
 		return metrics, err
@@ -406,49 +400,51 @@ type validationError struct {
 func (e *validationError) Error() string { return e.err.Error() }
 func (e *validationError) Unwrap() error { return e.err }
 
-func (s *Service) validateExact(ctx context.Context, candidate domain.Candidate) (domain.DirectMetrics, error) {
+func (s *Service) validateExact(ctx context.Context, candidate domain.Candidate) (validation, error) {
 	metrics := domain.DirectMetrics{}
 	dialer := &net.Dialer{Timeout: networkTimeout}
 	tcpStarted := time.Now()
 	connection, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(candidate.IP.String(), "443"))
 	if err != nil {
-		return metrics, &validationError{reason: "network", err: err}
+		return validation{metrics: metrics}, &validationError{reason: "network", err: err}
 	}
 	metrics.TCP = time.Since(tcpStarted)
 	defer connection.Close()
 	if err := connection.SetDeadline(time.Now().Add(networkTimeout)); err != nil {
-		return metrics, &validationError{reason: "network", err: err}
+		return validation{metrics: metrics}, &validationError{reason: "network", err: err}
 	}
 	tlsConfig := &tls.Config{ServerName: candidate.SNI, NextProtos: []string{"h2", "http/1.1"}, CurvePreferences: []tls.CurveID{tls.X25519}, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13}
 	tlsConnection := tls.Client(connection, tlsConfig)
 	tlsStarted := time.Now()
 	if err := tlsConnection.HandshakeContext(ctx); err != nil {
-		return metrics, classifyTLSHandshakeError(err)
+		return validation{metrics: metrics}, classifyTLSHandshakeError(err)
 	}
 	metrics.TLS = time.Since(tlsStarted)
 	state := tlsConnection.ConnectionState()
 	metrics.TLS13, metrics.X25519, metrics.HTTP2 = state.Version == tls.VersionTLS13, state.CurveID == tls.X25519, state.NegotiatedProtocol == "h2"
 	if len(state.PeerCertificates) == 0 {
-		return metrics, &validationError{reason: "certificate", err: errors.New("peer returned no certificate")}
+		return validation{metrics: metrics}, &validationError{reason: "certificate", err: errors.New("peer returned no certificate")}
 	}
 	leaf := state.PeerCertificates[0]
 	metrics.SNIValid, metrics.CertificateValid = leaf.VerifyHostname(candidate.SNI) == nil, len(state.VerifiedChains) > 0
 	metrics.CertificateDays, metrics.CertificateIssuer = int(time.Until(leaf.NotAfter).Hours()/24), leaf.Issuer.String()
 	if err := validateTLSState(&state, candidate.SNI); err != nil {
-		return metrics, err
+		return validation{metrics: metrics}, err
 	}
-	metrics.HTTP, metrics.HTTPStatus, err = requestExact(ctx, candidate, tlsConfig)
+	var headerEvidence []cdnEvidence
+	metrics.HTTP, metrics.HTTPStatus, headerEvidence, err = requestExact(ctx, candidate, tlsConfig)
 	if err != nil {
-		return metrics, &validationError{reason: "network", err: err}
+		return validation{metrics: metrics}, &validationError{reason: "network", err: err}
 	}
 	if !safeStatus(metrics.HTTPStatus) {
-		return metrics, &validationError{reason: "http_status", err: fmt.Errorf("unsafe HTTP status %d", metrics.HTTPStatus)}
+		return validation{metrics: metrics}, &validationError{reason: "http_status", err: fmt.Errorf("unsafe HTTP status %d", metrics.HTTPStatus)}
 	}
 	metrics.Success = true
-	return metrics, nil
+	evidence := append(cdnFromIP(candidate.IP), headerEvidence...)
+	return validation{metrics: metrics, cdn: evidence}, nil
 }
 
-func requestExact(ctx context.Context, candidate domain.Candidate, tlsConfig *tls.Config) (time.Duration, int, error) {
+func requestExact(ctx context.Context, candidate domain.Candidate, tlsConfig *tls.Config) (time.Duration, int, []cdnEvidence, error) {
 	dialer := &net.Dialer{Timeout: networkTimeout}
 	transport := &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return dialer.DialContext(ctx, "tcp", net.JoinHostPort(candidate.IP.String(), "443"))
@@ -457,18 +453,18 @@ func requestExact(ctx context.Context, candidate domain.Candidate, tlsConfig *tl
 	client := &http.Client{Transport: transport, Timeout: networkTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+candidate.SNI+"/", nil)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, nil, err
 	}
 	request.Header.Set("User-Agent", "Reality-ScannerNChecker/1.0")
 	started := time.Now()
 	response, err := client.Do(request)
 	duration := time.Since(started)
 	if err != nil {
-		return duration, 0, err
+		return duration, 0, nil, err
 	}
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4<<10))
-	return duration, response.StatusCode, nil
+	return duration, response.StatusCode, cdnFromHeaders(response.Header), nil
 }
 
 func (s *Service) VerifyQualified(ctx context.Context, run *domain.RunResult, onProgress ProgressFunc) {
@@ -489,15 +485,27 @@ func (s *Service) VerifyQualified(ctx context.Context, run *domain.RunResult, on
 		go func() {
 			defer workers.Done()
 			for index := range jobs {
+				observations := make([]cdnEvidence, 0, verificationRounds+1)
+				cnameChecked := false
+				if s.lookupCNAME != nil {
+					cname, err := s.lookupCNAME(ctx, candidates[index].Candidate.SNI)
+					if err == nil {
+						cnameChecked = true
+						observations = append(observations, cdnFromCNAME(cname)...)
+					}
+				}
 				rounds := make([]domain.DirectMetrics, 0, verificationRounds)
 				for range verificationRounds {
-					metrics, err := s.validate(ctx, candidates[index].Candidate)
+					checked, err := s.validate(ctx, candidates[index].Candidate)
+					metrics := checked.metrics
 					if err != nil {
 						metrics.Success = false
 					}
+					observations = append(observations, checked.cdn...)
 					rounds = append(rounds, metrics)
 				}
 				candidates[index].Rounds = rounds
+				mergeCDNFinding(&candidates[index].Analysis, classifyCDN(observations, successfulRoundCount(rounds), cnameChecked, s.currentTime()))
 				mu.Lock()
 				done++
 				if onProgress != nil {
@@ -537,6 +545,47 @@ func rejectionForSourceWithAnalysis(source domain.Source, analysis domain.SiteAn
 	result := rejectionForSource(source, reason, detail)
 	result.Analysis = analysis
 	return result
+}
+
+func (s *Service) currentTime() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
+}
+
+func successfulRoundCount(rounds []domain.DirectMetrics) int {
+	count := 0
+	for _, round := range rounds {
+		if round.Success {
+			count++
+		}
+	}
+	return count
+}
+
+func mergeCDNFinding(analysis *domain.SiteAnalysis, finding cdnFinding) {
+	if !finding.known {
+		return
+	}
+	if analysis.CDNKnown && analysis.CDN {
+		if !finding.detected {
+			return
+		}
+		if analysis.CDNProvider != "" && finding.provider != "" && analysis.CDNProvider != finding.provider {
+			analysis.CDNProvider = "Multiple"
+			analysis.CDNConfidence = "high"
+		}
+		if analysis.CDNEvidence != finding.evidence && finding.evidence != "" {
+			analysis.CDNEvidence = strings.Trim(analysis.CDNEvidence+"；"+finding.evidence, "；")
+		}
+		return
+	}
+	analysis.CDNKnown = true
+	analysis.CDN = finding.detected
+	analysis.CDNProvider = finding.provider
+	analysis.CDNConfidence = finding.confidence
+	analysis.CDNEvidence = finding.evidence
 }
 func classifyValidationFailure(err error) (string, string) {
 	var target *validationError
