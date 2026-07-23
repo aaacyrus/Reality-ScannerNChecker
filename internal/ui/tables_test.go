@@ -25,10 +25,13 @@ func TestRankingTableContainsEveryMetric(t *testing.T) {
 		Score:  domain.ScoreBreakdown{Stability: 30, TLS: 25, HTTP: 15, NoCDN: 15, NotHot: 10, Domain: 5, Certificate: 5},
 	}
 	output := RankingTable([]domain.Result{result}, i18n.Translator{Language: domain.LanguageEnglish})
-	for _, expected := range []string{"1.1.1.1", "example.com", "105", "3/3", "10ms", "20ms", "30ms", "TLS1.3", "X25519", "H2", "CERT DAYS", "US"} {
+	for _, expected := range []string{"1.1.1.1", "example.com", "105", "3/3", "10ms", "20ms", "30ms", "TLS1.3", "X25519", "H2", "CERT DAYS", "NO CDN", "US"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("table does not contain %q:\n%s", expected, output)
 		}
+	}
+	if label := cdnLabel(result, i18n.Translator{Language: domain.LanguageEnglish}); label != "✓" {
+		t.Fatalf("no-CDN label = %q, want ✓", label)
 	}
 }
 

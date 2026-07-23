@@ -188,6 +188,9 @@ func yesNo(known, value bool, translator i18n.Translator) string {
 }
 
 func cdnLabel(result domain.Result, translator i18n.Translator) string {
+	if result.Analysis.CDNKnown && !result.Analysis.CDN {
+		return "✓"
+	}
 	if result.Analysis.CDNKnown && result.Analysis.CDN && result.Analysis.CDNProvider != "" {
 		return localizeProvider(result.Analysis.CDNProvider, translator)
 	}
