@@ -49,6 +49,13 @@ if ! grep -Eq '^## English[[:space:]]*$' "$notes_file"; then
   exit 1
 fi
 
+english_heading_line="$(grep -n -m 1 -E '^## English[[:space:]]*$' "$notes_file" | cut -d: -f1)"
+chinese_heading_line="$(grep -n -m 1 -E '^## 繁體中文[[:space:]]*$' "$notes_file" | cut -d: -f1)"
+if (( english_heading_line >= chinese_heading_line )); then
+  echo "release notes must place ## English before ## 繁體中文" >&2
+  exit 1
+fi
+
 if [[ "$(head -n 1 "$notes_file")" != "# Reality Scanner & Checker $version" ]]; then
   echo "release notes must start with the versioned title: # Reality Scanner & Checker $version" >&2
   exit 1

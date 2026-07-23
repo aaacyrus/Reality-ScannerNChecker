@@ -21,18 +21,18 @@ Every build also produces `BUILD_INFO.txt` and `SHA256SUMS`.
 
 ## 標準流程 / Standard workflow
 
-### 1. 撰寫雙語說明 / Write bilingual notes
+### 1. Write bilingual notes / 撰寫雙語說明
 
 ```sh
 cp release-notes/TEMPLATE.md release-notes/v0.1.0.md
 ```
 
-把標題版本改為 `v0.1.0`，並完成 `## 繁體中文` 與 `## English` 兩部分。
-發佈腳本缺少任何一種語言時會拒絕執行。
+Change the title version to `v0.1.0`, then complete the `## English` section
+first and the `## 繁體中文` section second. Publishing is rejected if either
+language section is missing or the order is reversed.
 
-Change the title version to `v0.1.0`, then complete both the
-`## 繁體中文` and `## English` sections. Publishing is rejected if either
-language section is missing.
+把標題版本改為 `v0.1.0`，先完成 `## English`，再完成 `## 繁體中文`。
+缺少任一語言部分或順序顛倒時，發佈腳本會拒絕執行。
 
 ### 2. 提交及推送 / Commit and push
 
