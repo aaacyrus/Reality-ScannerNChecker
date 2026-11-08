@@ -24,9 +24,19 @@ An interactive terminal tool that discovers nearby IPv4 TLS endpoints, validates
 
 ### Quick start
 
-#### Linux x86-64 (amd64)
+Each command finds the matching asset from the latest GitHub Release, downloads it to a temporary path, and runs it. Go is not required.
 
-This command finds the Linux amd64 asset from the latest GitHub Release, downloads it to `/tmp`, and runs it. Go is not required.
+#### Linux
+
+**x86 32-bit (386)**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_386' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+**x86-64 (amd64)**
 
 ```sh
 curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
@@ -34,7 +44,67 @@ curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/release
   xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
 ```
 
-For other Linux, macOS, and Windows architectures, download the matching asset from [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases). On Linux/macOS, run `chmod +x <filename>` after downloading.
+**ARM64 (aarch64)**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_arm64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+#### macOS
+
+**Intel (amd64)**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_darwin_amd64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+**Apple Silicon (arm64)**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_darwin_arm64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+#### Windows (PowerShell)
+
+Run these in PowerShell. Windows 10 1803+ and Windows Server 2019+ include `curl.exe`.
+
+**x86 32-bit (386)**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_386.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+**x86-64 (amd64)**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_amd64.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+**ARM64**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_arm64.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+All release assets are also listed on [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases).
 
 #### Local development
 
@@ -106,9 +176,19 @@ This tool is intended only for lawful technical research, network administration
 
 ### 快速使用
 
-#### Linux x86-64（amd64）
+以下每條指令都會從最新 GitHub Release 找出對應執行檔、下載到暫存路徑並啟動；不需要安裝 Go。
 
-以下指令會從最新 GitHub Release 自動找出 Linux amd64 執行檔、下載到 `/tmp` 並啟動；不需要安裝 Go。
+#### Linux
+
+**x86 32 位元（386）**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_386' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+**x86-64（amd64）**
 
 ```sh
 curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
@@ -116,7 +196,67 @@ curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/release
   xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
 ```
 
-其他 Linux、macOS 及 Windows 架構請前往 [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases) 下載相符檔案。Linux／macOS 下載後請執行 `chmod +x <檔名>`。
+**ARM64（aarch64）**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_linux_arm64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+#### macOS
+
+**Intel（amd64）**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_darwin_amd64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+**Apple Silicon（arm64）**
+
+```sh
+curl -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest |
+  grep -o 'https://[^" ]*reality-scanner-checker_[^" ]*_darwin_arm64' | head -n 1 |
+  xargs -I{} sh -c 'curl -fL "{}" -o /tmp/reality-scanner-checker && chmod +x /tmp/reality-scanner-checker && /tmp/reality-scanner-checker </dev/tty'
+```
+
+#### Windows（PowerShell）
+
+請在 PowerShell 執行。Windows 10 1803+ 及 Windows Server 2019+ 已內建 `curl.exe`。
+
+**x86 32 位元（386）**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_386.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+**x86-64（amd64）**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_amd64.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+**ARM64**
+
+```powershell
+curl.exe -fsSL https://api.github.com/repos/aaacyrus/Reality-ScannerNChecker/releases/latest -o "$env:TEMP\rsc.json"
+$r = Get-Content "$env:TEMP\rsc.json" -Raw | ConvertFrom-Json
+$u = ($r.assets | Where-Object name -like '*windows_arm64.exe').browser_download_url
+curl.exe -fL $u -o "$env:TEMP\rsc.exe"
+& "$env:TEMP\rsc.exe"
+```
+
+所有版本亦可於 [Releases](https://github.com/aaacyrus/Reality-ScannerNChecker/releases) 查看。
 
 #### 本機開發
 
